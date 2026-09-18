@@ -1,0 +1,27 @@
+name: hizb_ul_bahr
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_page_curl: ^0.1.0
+  pdfrx: ^2.6.1
+  # syncfusion_flutter_pdfviewer: ^27.1.55
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - lib/assets/Noorani_Qaida.pdf
+    - lib/assets/QuranMajeed.pdf
