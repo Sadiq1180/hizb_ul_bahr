@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_page_curl/flutter_page_curl.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // NEW
 
 const _readerArabicFont = 'Amiri';
 
@@ -27,6 +28,13 @@ class _PdfBookPageState extends State<PdfBookPage> {
   int _currentCurlPage = 0;
   bool _openedAtUrduFirstPage = false;
 
+  // NEW: saved reading position.
+  SharedPreferences? _prefs;
+  bool _prefsReady = false;
+  int? _savedPdfPage;
+
+  String get _prefsKey => 'pdf_last_page::${widget.assetPath}';
+
   /// When true, the curl is wrapped in an InteractiveViewer so the user
   /// can pinch-zoom and pan. The curl is disabled while this is on.
   bool _zoomMode = false;
@@ -44,11 +52,35 @@ class _PdfBookPageState extends State<PdfBookPage> {
 
   int get _currentPdfPage => _cachedTotalPages - _currentCurlPage;
 
+  // NEW
+  @override
+  void initState() {
+    super.initState();
+    _restoreProgress();
+  }
+
   @override
   void dispose() {
     _bookController.dispose();
     _imageCache.dispose();
     super.dispose();
+  }
+
+  // NEW: load the last page number saved for this book.
+  Future<void> _restoreProgress() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _prefs = prefs;
+      _savedPdfPage = prefs.getInt(_prefsKey);
+    } catch (_) {
+      // If storage fails, just start from the first page.
+    }
+    if (mounted) setState(() => _prefsReady = true);
+  }
+
+  // NEW: save the page number the user is on.
+  void _saveProgress(int pdfPage) {
+    _prefs?.setInt(_prefsKey, pdfPage);
   }
 
   Future<void> _prefetchPage(PdfDocument document, int pdfPageNumber) async {
@@ -200,7 +232,8 @@ class _PdfBookPageState extends State<PdfBookPage> {
       body: PdfDocumentViewBuilder.asset(
         widget.assetPath,
         builder: (context, document) {
-          if (document == null) {
+          // CHANGED: also wait until the saved page has been loaded.
+          if (document == null || !_prefsReady) {
             return const Center(
               child: CircularProgressIndicator(color: Color(0xFFD4A548)),
             );
@@ -227,13 +260,17 @@ class _PdfBookPageState extends State<PdfBookPage> {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (!mounted || _openedAtUrduFirstPage) return;
 
+              // CHANGED: open at the saved page (or page 1 if none saved).
+              final startPdfPage = (_savedPdfPage ?? 1).clamp(1, totalPages);
+              final startCurlPage = totalPages - startPdfPage;
+
               setState(() {
                 _openedAtUrduFirstPage = true;
-                _currentCurlPage = totalPages - 1;
+                _currentCurlPage = startCurlPage;
               });
 
-              _bookController.jumpToPage(totalPages - 1);
-              _prefetchAround(document, totalPages - 1);
+              _bookController.jumpToPage(startCurlPage);
+              _prefetchAround(document, startCurlPage);
             });
           }
 
@@ -273,6 +310,12 @@ class _PdfBookPageState extends State<PdfBookPage> {
                                 onPageChanged: (page) {
                                   setState(() => _currentCurlPage = page);
                                   _prefetchAround(document, page);
+                                  // NEW: remember this page. Skipped until
+                                  // the initial jump is done so a startup
+                                  // event can't overwrite the saved page.
+                                  if (_openedAtUrduFirstPage) {
+                                    _saveProgress(_cachedTotalPages - page);
+                                  }
                                 },
                                 children: _cachedPages!,
                               ),
