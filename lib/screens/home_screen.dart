@@ -3,7 +3,7 @@ import 'package:hizb_ul_bahr/core/app_constants.dart';
 import 'package:hizb_ul_bahr/models/menu_items.dart';
 import 'package:hizb_ul_bahr/screens/pdfbook.dart';
 import 'package:hizb_ul_bahr/widgets/home_footer.dart';
-import 'package:hizb_ul_bahr/widgets/home_header.dart';
+import 'package:hizb_ul_bahr/widgets/home_header/home_header.dart';
 import 'package:hizb_ul_bahr/widgets/menu_button.dart';
 
 class HomeScreen extends StatefulWidget {
