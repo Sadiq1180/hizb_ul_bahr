@@ -5,5 +5,5 @@ class AppConstants {
   static const arabicNameFont = 'Amiri';
 
   // Change this if your PDF file path is different.
-  static const bookAsset = 'lib/assets/Noorani_Qaida.pdf';
+  static const bookAsset = 'lib/assets/book.pdf';
 }

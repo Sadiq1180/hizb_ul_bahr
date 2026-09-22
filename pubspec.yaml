@@ -20,9 +20,23 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_native_splash: ^2.4.8
+  flutter_soloud: ^5.1.2
+
+# --- Root-level splash configuration ---
+flutter_native_splash:
+  android: true
+  ios: true
+  color: "#ffffff"
+  image: lib/assets/splash2.png
+
+  # Android 12 specific settings
+  android_12:
+    image: lib/assets/splash2.png
+    color: "#ffffff"
 
 flutter:
   uses-material-design: true
   assets:
-    - lib/assets/Noorani_Qaida.pdf
-    - lib/assets/QuranMajeed.pdf
+    - lib/assets/book.pdf
+    - lib/assets/audio/page_flip_sound.mp3

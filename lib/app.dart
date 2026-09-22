@@ -14,7 +14,7 @@ class HizbUlBahrApp extends StatelessWidget {
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF176B87))
             .copyWith(secondary: const Color(0xFFD89B3D)),
-        scaffoldBackgroundColor: const Color(0xFFF3F8F3),
+        scaffoldBackgroundColor: Colors.grey[500],
       ),
       builder: (context, child) {
         return Directionality(textDirection: TextDirection.rtl, child: child!);

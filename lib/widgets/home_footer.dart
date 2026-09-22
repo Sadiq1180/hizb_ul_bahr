@@ -26,7 +26,7 @@ class HomeFooter extends StatelessWidget {
         const Text(
           AppConstants.appName,
           style: TextStyle(
-            color: Color(0xFF779087),
+            color: Colors.white,
             fontSize: 12,
             fontWeight: FontWeight.w600,
           ),

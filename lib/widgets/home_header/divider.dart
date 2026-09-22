@@ -4,48 +4,63 @@ import 'package:flutter/material.dart';
 class OrnamentalDivider extends StatelessWidget {
   const OrnamentalDivider({super.key});
 
+  static const Color _gold = Color(0xFFD4A548);
+
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _line(),
-        const SizedBox(width: 10),
-        // Diamond shape
-        Transform.rotate(
-          angle: 0.785398,
-          child: Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: const Color(0xFFD4A548),
-              borderRadius: BorderRadius.circular(1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFD4A548).withValues(alpha: 0.6),
-                  blurRadius: 6,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        _line(),
+        _line(fadeToLeft: true),
+        const SizedBox(width: 14),
+        _diamond(),
+        const SizedBox(width: 14),
+        _line(fadeToLeft: false),
       ],
     );
   }
 
-  Widget _line() {
-    return Container(
-      width: 56,
-      height: 1,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            const Color(0xFFD4A548).withValues(alpha: 0.0),
-            const Color(0xFFD4A548).withValues(alpha: 0.8),
-            const Color(0xFFD4A548).withValues(alpha: 0.0),
+  /// A thin line that fades toward the outer edge.
+  Widget _line({required bool fadeToLeft}) {
+    final colors = fadeToLeft
+        ? [_gold.withValues(alpha: 0.0), _gold.withValues(alpha: 0.7)]
+        : [_gold.withValues(alpha: 0.7), _gold.withValues(alpha: 0.0)];
+
+    return Expanded(
+      child: Container(
+        height: 1,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: colors,
+            begin: fadeToLeft ? Alignment.centerLeft : Alignment.centerRight,
+            end: fadeToLeft ? Alignment.centerRight : Alignment.centerLeft,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A softly glowing rotated square.
+  Widget _diamond() {
+    return Transform.rotate(
+      angle: 0.785398, // 45°
+      child: Container(
+        width: 9,
+        height: 9,
+        decoration: BoxDecoration(
+          color: _gold,
+          borderRadius: BorderRadius.circular(1.5),
+          boxShadow: [
+            BoxShadow(
+              color: _gold.withValues(alpha: 0.55),
+              blurRadius: 8,
+              spreadRadius: 1,
+            ),
           ],
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.6),
+            width: 0.8,
+          ),
         ),
       ),
     );
