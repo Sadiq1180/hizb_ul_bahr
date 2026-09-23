@@ -15,28 +15,29 @@ dependencies:
   pdfrx: ^2.6.1
   # syncfusion_flutter_pdfviewer: ^27.1.55
   shared_preferences: ^2.2.0
+  flutter_native_splash: ^2.4.8
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  flutter_native_splash: ^2.4.8
-  flutter_soloud: ^5.1.2
 
 # --- Root-level splash configuration ---
 flutter_native_splash:
   android: true
   ios: true
   color: "#ffffff"
-  image: lib/assets/splash2.png
+  image: assets/splash2.png
 
   # Android 12 specific settings
   android_12:
-    image: lib/assets/splash2.png
+    image: assets/splash2.png
     color: "#ffffff"
 
 flutter:
   uses-material-design: true
   assets:
-    - lib/assets/book.pdf
-    - lib/assets/audio/page_flip_sound.mp3
+    - assets/book.pdf
+    - assets/audio/page_turn.mp3
+    - assets/audio/flip_sound.mp3
