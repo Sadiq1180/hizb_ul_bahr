@@ -27,4 +27,5 @@ class ReaderColors {
   static const paper = Color(0xFFFFFCF5);
   static const accent = Color(0xFFD4A548);
   static const ink = Color(0xFF49675C);
+  static const Color desk = Color(0xFF1E1A16);
 }

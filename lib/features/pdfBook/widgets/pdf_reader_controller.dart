@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_page_curl/flutter_page_curl.dart';
 import 'package:hizb_ul_bahr/core/app_constants.dart';
 import 'package:hizb_ul_bahr/features/services/flip_sound.dart';
@@ -11,14 +12,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Owns all reader state and side effects: persistence, sound, page cache,
 /// prefetching, and the current curl/Pdf page mapping.
-///
-/// The UI layer only reads from this and calls the intent methods
-/// (`toggleSound`, `onCurlPageChanged`, `onDocumentReady`, …).
 class PdfReaderController extends ChangeNotifier {
-  PdfReaderController({required this.assetPath, required this.bookController});
+  PdfReaderController({required this.assetPath});
 
   final String assetPath;
-  final PageCurlController bookController;
+
+  bool _disposed = false;
+
+  /// Attached lazily by the UI once preferences are loaded.
+  PageCurlController? bookController;
+
+  void attachBookController(PageCurlController controller) {
+    bookController = controller;
+  }
 
   // ── Persistence keys ──────────────────────────────────────────
   String get _prefsKey => 'pdf_last_page::$assetPath';
@@ -32,37 +38,48 @@ class PdfReaderController extends ChangeNotifier {
 
   final FlipSoundPlayer _flipSound = FlipSoundPlayer();
 
-  // ── Public state (UI reads these) ─────────────────────────────
+  // ── Public state ──────────────────────────────────────────────
   SharedPreferences? _prefs;
 
-  /// True after preferences have loaded and the reader can show pages.
   bool prefsReady = false;
 
-  /// Stored start page from last session (nullable).
+  /// True once the images around the start page are in the cache, so the
+  /// curl view can be shown without drawing loading placeholders.
+  bool pagesReady = false;
+  bool _preloading = false;
+
   int? savedPdfPage;
 
-  /// Current document + page count (set via [attachDocument]).
   PdfDocument? document;
   int totalPages = 0;
   List<Widget>? pages;
 
-  /// Current user-visible state.
   bool soundEnabled = true;
   bool zoomMode = false;
   int currentCurlPage = 0;
   int currentPdfPage = 1;
 
-  /// Notifiers used by the page tiles.
   final ValueNotifier<bool> zoomModeNotifier = ValueNotifier<bool>(false);
   final ValueNotifier<int> currentPdfPageNotifier = ValueNotifier<int>(1);
 
-  /// Prevents the initial "jump to saved page" from playing a flip sound.
   bool _suppressNextFlipSound = false;
-
-  /// Set once the initial jump has been performed.
   bool openedAtStartPage = false;
 
   double renderWidthPx = 800;
+
+  // ── Safe notification ─────────────────────────────────────────
+
+  void _notify() {
+    if (_disposed) return;
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (!_disposed) notifyListeners();
+      });
+    } else {
+      notifyListeners();
+    }
+  }
 
   // ── Lifecycle ─────────────────────────────────────────────────
 
@@ -73,6 +90,7 @@ class PdfReaderController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     if (openedAtStartPage && totalPages > 0) {
       _saveProgress(currentPdfPage);
     }
@@ -91,9 +109,12 @@ class PdfReaderController extends ChangeNotifier {
       soundEnabled = prefs.getBool(_soundPrefsKey) ?? true;
       _flipSound.enabled = soundEnabled;
     } catch (_) {}
+
+    if (_disposed) return;
+
     currentPdfPageNotifier.value = savedPdfPage ?? 1;
     prefsReady = true;
-    notifyListeners();
+    _notify();
   }
 
   void _saveProgress(int pdfPage) {
@@ -104,11 +125,15 @@ class PdfReaderController extends ChangeNotifier {
 
   // ── Document / page initialisation ────────────────────────────
 
-  /// Called by the UI when a document is available. Returns true if the
-  /// caller should schedule the initial jump to the saved page.
   bool attachDocument(PdfDocument doc, List<Widget> builtPages) {
     final changed =
         document != doc || totalPages != doc.pages.length || pages == null;
+
+    if (changed) {
+      pagesReady = false;
+      _preloading = false;
+      openedAtStartPage = false;
+    }
 
     document = doc;
     totalPages = doc.pages.length;
@@ -116,24 +141,70 @@ class PdfReaderController extends ChangeNotifier {
     return changed;
   }
 
-  /// Perform the initial jump to the saved page. Called by the UI inside a
-  /// post-frame callback.
-  void jumpToStartPage() {
+  /// Loads the start page and the next page (the one revealed when turning
+  /// forward) and flips [pagesReady] as soon as those two are cached.
+  /// Other neighbours load in the background without blocking the UI.
+  Future<void> preloadInitialPages(PdfDocument doc) async {
+    if (_preloading || pagesReady || _disposed) return;
+    _preloading = true;
+
+    final total = doc.pages.length;
+    final start = (savedPdfPage ?? 1).clamp(1, total);
+
+    Future<void> safeLoad(int page) async {
+      if (page < 1 || page > total) return;
+      try {
+        await imageCache.load(doc, page).timeout(const Duration(seconds: 3));
+      } catch (_) {
+        // A slow/failed page must not block the reader.
+      }
+    }
+
+    // Background: everything else nearby, not awaited.
+    for (final p in [start + 1, start + 2, start - 2]) {
+      unawaited(safeLoad(p));
+    }
+
+    // Wait only for what is visible now: current page + next page, in
+    // parallel (not one after the other).
+    await Future.wait([safeLoad(start), safeLoad(start - 1)]);
+
+    if (_disposed) return;
+    pagesReady = true;
+    _preloading = false;
+    _notify();
+  }
+
+  /// Curl-page index that corresponds to the saved (or first) PDF page.
+  int computeStartCurlPage() {
+    if (totalPages == 0) return 0;
+    final startPdfPage = (savedPdfPage ?? 1).clamp(1, totalPages);
+    return totalPages - startPdfPage;
+  }
+
+  /// Syncs internal state to match the page the curl view opened on.
+  void markOpenedAtStartPage({bool deferNotify = false}) {
     if (openedAtStartPage || totalPages == 0) return;
 
     final startPdfPage = (savedPdfPage ?? 1).clamp(1, totalPages);
     final startCurlPage = totalPages - startPdfPage;
 
-    _prefetchAround(startCurlPage);
-
     openedAtStartPage = true;
     currentCurlPage = startCurlPage;
+    currentPdfPage = startPdfPage;
     currentPdfPageNotifier.value = startPdfPage;
 
+    _prefetchAround(startCurlPage);
     _suppressNextFlipSound = true;
-    bookController.jumpToPage(startCurlPage);
 
-    notifyListeners();
+    if (!deferNotify) {
+      _notify();
+    }
+  }
+
+  /// Safe to call from a post-frame callback or async context.
+  void notifySafely() {
+    _notify();
   }
 
   // ── User intents ──────────────────────────────────────────────
@@ -145,16 +216,15 @@ class PdfReaderController extends ChangeNotifier {
       unawaited(_flipSound.stopAll());
     }
     unawaited(_prefs?.setBool(_soundPrefsKey, soundEnabled));
-    notifyListeners();
+    _notify();
   }
 
   void toggleZoom() {
     zoomMode = !zoomMode;
     zoomModeNotifier.value = zoomMode;
-    notifyListeners();
+    _notify();
   }
 
-  /// Called from `PageCurlView.onPageChanged`.
   void onCurlPageChanged(int page) {
     final skipSound = _suppressNextFlipSound;
     _suppressNextFlipSound = false;
@@ -173,10 +243,9 @@ class PdfReaderController extends ChangeNotifier {
       unawaited(_flipSound.play());
     }
 
-    notifyListeners();
+    _notify();
   }
 
-  /// Page number to render behind the curl animation.
   int? get backdropPdfPage {
     final nextCurlIndex = currentCurlPage + 1;
     if (nextCurlIndex >= totalPages) return null;

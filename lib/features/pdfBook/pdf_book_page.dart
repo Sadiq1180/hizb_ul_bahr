@@ -20,17 +20,22 @@ class PdfBookPage extends StatefulWidget {
 }
 
 class _PdfBookPageState extends State<PdfBookPage> {
-  late final PageCurlController _bookController;
   late final PdfReaderController _controller;
+
+  PageCurlController? _bookController;
+
+  PdfDocument? _attachedDocument;
+
+  /// Guards the post-frame "mark opened" so it only runs once per document.
+  bool _openedScheduled = false;
+
+  /// Guards the initial image preload so it only starts once per document.
+  bool _preloadStarted = false;
 
   @override
   void initState() {
     super.initState();
-    _bookController = PageCurlController();
-    _controller = PdfReaderController(
-      assetPath: widget.assetPath,
-      bookController: _bookController,
-    );
+    _controller = PdfReaderController(assetPath: widget.assetPath);
     unawaited(_controller.init());
   }
 
@@ -47,11 +52,11 @@ class _PdfBookPageState extends State<PdfBookPage> {
   @override
   void dispose() {
     _controller.dispose();
-    _bookController.dispose();
+    _bookController?.dispose();
     super.dispose();
   }
 
-  // ── Page builders (pure UI) ───────────────────────────────────
+  // ── Page builders ─────────────────────────────────────────────
 
   List<Widget> _buildPages(PdfDocument document) {
     final total = document.pages.length;
@@ -68,19 +73,34 @@ class _PdfBookPageState extends State<PdfBookPage> {
   }
 
   Widget _buildBackdrop(PdfDocument document) {
-    final pdfPageNumber = _controller.backdropPdfPage;
-    if (pdfPageNumber == null) {
+    final current = _controller.backdropPdfPage;
+    if (current == null) {
       return const ColoredBox(color: ReaderColors.paper);
     }
+
+    final total = document.pages.length;
+    final nextCurlIndex = _controller.currentCurlPage + 2;
+    final nextPdf = nextCurlIndex < total ? total - nextCurlIndex : null;
+
     return ColoredBox(
       color: ReaderColors.paper,
       child: Stack(
+        fit: StackFit.expand,
         children: [
+          if (nextPdf != null)
+            Positioned.fill(
+              child: CachedPdfPageImage(
+                key: ValueKey('pdf_backdrop_next_$nextPdf'),
+                document: document,
+                pageNumber: nextPdf,
+                cache: _controller.imageCache,
+              ),
+            ),
           Positioned.fill(
             child: CachedPdfPageImage(
-              key: ValueKey('pdf_backdrop_$pdfPageNumber'),
+              key: ValueKey('pdf_backdrop_$current'),
               document: document,
-              pageNumber: pdfPageNumber,
+              pageNumber: current,
               cache: _controller.imageCache,
             ),
           ),
@@ -89,17 +109,49 @@ class _PdfBookPageState extends State<PdfBookPage> {
     );
   }
 
-  Widget _buildReader(PdfDocument document) {
-    // Cache pages the first time we see a document of a given size.
-    if (_controller.document != document ||
-        _controller.pages == null ||
-        _controller.totalPages != document.pages.length) {
-      _controller.attachDocument(document, _buildPages(document));
+  Widget _buildLoader() {
+    return const Center(
+      child: CircularProgressIndicator(color: ReaderColors.accent),
+    );
+  }
 
-      // Schedule the initial jump on the next frame.
+  Widget _buildReader(PdfDocument document) {
+    // Attach the document once per identity.
+    if (!identical(_attachedDocument, document)) {
+      _attachedDocument = document;
+      _openedScheduled = false;
+      _preloadStarted = false;
+      _controller.attachDocument(document, _buildPages(document));
+    }
+
+    // Wait until the start page + neighbours are in the cache. Showing the
+    // curl view earlier makes it capture loading placeholders, which is why
+    // the pages stayed blank until the first page turn.
+    if (!_controller.pagesReady) {
+      if (!_preloadStarted) {
+        _preloadStarted = true;
+        unawaited(_controller.preloadInitialPages(document));
+      }
+      return _buildLoader();
+    }
+
+    // Create the curl controller exactly once, with the correct
+    // `initialPage` so the view opens on the saved page immediately.
+    if (_bookController == null) {
+      _bookController = PageCurlController(
+        initialPage: _controller.computeStartCurlPage(),
+      );
+      _controller.attachBookController(_bookController!);
+    }
+
+    // Sync internal state AFTER the current frame finishes, so we never
+    // notify during build.
+    if (!_openedScheduled && !_controller.openedAtStartPage) {
+      _openedScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        _controller.jumpToStartPage();
+        _controller.markOpenedAtStartPage(deferNotify: true);
+        _controller.notifySafely();
       });
     }
 
@@ -110,7 +162,8 @@ class _PdfBookPageState extends State<PdfBookPage> {
         IgnorePointer(
           ignoring: _controller.zoomMode,
           child: PageCurlView(
-            controller: _bookController,
+            key: ValueKey('curl_${identityHashCode(document)}'),
+            controller: _bookController!,
             radius: 0.06,
             shadowWidth: 0.14,
             backOpacity: 1.0,
@@ -128,15 +181,14 @@ class _PdfBookPageState extends State<PdfBookPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // Fill every pixel — no white sliver behind system bars.
       backgroundColor: ReaderColors.paper,
       extendBody: true,
-      body: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          return Column(
-            children: [
-              ReaderHeader(
+      body: Column(
+        children: [
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) {
+              return ReaderHeader(
                 title: widget.title,
                 soundEnabled: _controller.soundEnabled,
                 onToggleSound: _controller.toggleSound,
@@ -144,28 +196,32 @@ class _PdfBookPageState extends State<PdfBookPage> {
                 totalPages: _controller.totalPages == 0
                     ? 1
                     : _controller.totalPages,
-              ),
-              Expanded(
-                child: ColoredBox(
-                  color: ReaderColors.paper,
-                  child: PdfDocumentViewBuilder.asset(
-                    widget.assetPath,
-                    builder: (context, document) {
-                      if (document == null || !_controller.prefsReady) {
-                        return const Center(
-                          child: CircularProgressIndicator(
-                            color: ReaderColors.accent,
-                          ),
-                        );
-                      }
+              );
+            },
+          ),
+          Expanded(
+            child: ColoredBox(
+              color: ReaderColors.paper,
+              // Document loader stays OUTSIDE so it never rebuilds on
+              // page turns.
+              child: PdfDocumentViewBuilder.asset(
+                widget.assetPath,
+                builder: (context, document) {
+                  if (document == null) return _buildLoader();
+
+                  // Only the reader listens to the controller.
+                  return AnimatedBuilder(
+                    animation: _controller,
+                    builder: (context, _) {
+                      if (!_controller.prefsReady) return _buildLoader();
                       return _buildReader(document);
                     },
-                  ),
-                ),
+                  );
+                },
               ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
