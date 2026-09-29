@@ -5,16 +5,12 @@ class ReaderHeader extends StatelessWidget {
   const ReaderHeader({
     super.key,
     required this.title,
-    required this.soundEnabled,
-    required this.onToggleSound,
     required this.currentPage,
     required this.totalPages,
     this.onBack,
   });
 
   final String title;
-  final bool soundEnabled;
-  final VoidCallback onToggleSound;
   final int currentPage;
   final int totalPages;
   final VoidCallback? onBack;
@@ -46,27 +42,28 @@ class ReaderHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // ── Back button ────────────────────────────────
+          // ── Back button (Commented out as per original) ──
           // _GlassButton(
           //   icon: Icons.arrow_back_rounded,
           //   tooltip: 'Back',
           //   onTap: onBack ?? () => Navigator.of(context).maybePop(),
           // ),
-          const SizedBox(width: 4),
+          // const SizedBox(width: 4),
 
-          // ── Title + page counter ───────────────────────
+          // ── Title + page counter (Centered now) ────────
           Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center, // Centered
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 17,
+                    fontSize: 18,
                     fontWeight: FontWeight.w700,
                     height: 1.2,
                   ),
@@ -74,6 +71,7 @@ class ReaderHeader extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   'صفحہ $currentPage / $totalPages',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: .78),
                     fontSize: 12,
@@ -83,48 +81,7 @@ class ReaderHeader extends StatelessWidget {
               ],
             ),
           ),
-
-          // ── Sound toggle ───────────────────────────────
-          _GlassButton(
-            icon: soundEnabled
-                ? Icons.volume_up_rounded
-                : Icons.volume_off_rounded,
-            tooltip: soundEnabled ? 'Mute page sound' : 'Unmute page sound',
-            onTap: onToggleSound,
-          ),
         ],
-      ),
-    );
-  }
-}
-
-class _GlassButton extends StatelessWidget {
-  const _GlassButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: Colors.white.withValues(alpha: .16),
-        shape: const CircleBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: SizedBox(
-            width: 42,
-            height: 42,
-            child: Center(child: Icon(icon, color: Colors.white, size: 22)),
-          ),
-        ),
       ),
     );
   }

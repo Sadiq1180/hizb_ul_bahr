@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_page_curl/flutter_page_curl.dart';
@@ -115,6 +116,86 @@ class _PdfBookPageState extends State<PdfBookPage> {
     );
   }
 
+  // ── BEAUTIFUL ISLAMIC BOTTOM BAR ──────────────────────────────
+  // This builds the bottom bar with the sound button and Islamic design.
+  Widget _buildBottomBar() {
+    return Positioned(
+      bottom: 0,
+      left: 0,
+      right: 0,
+      child: Container(
+        height: 100, // Height of the bottom bar
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF087055), // ReaderColors.appBar
+              Color(0xFF075A45), // Darker shade for depth
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Color(0x33000000),
+              blurRadius: 10,
+              offset: Offset(0, -4),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            // 1. Subtle Islamic Pattern overlay
+            Positioned.fill(
+              child: CustomPaint(
+                painter: IslamicPatternPainter(
+                  color: ReaderColors.accent.withValues(alpha: 0.15),
+                ),
+              ),
+            ),
+
+            // 2. Content (Sound Button)
+            Center(
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (context, _) {
+                  return _buildSoundButton();
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSoundButton() {
+    final isEnabled = _controller.soundEnabled;
+    return Material(
+      color: Colors.white.withValues(alpha: 0.15),
+      shape: const CircleBorder(),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: _controller.toggleSound,
+        child: Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: ReaderColors.accent.withValues(alpha: 0.5),
+              width: 1.5,
+            ),
+          ),
+          child: Icon(
+            isEnabled ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+            color: isEnabled ? ReaderColors.accent : Colors.white70,
+            size: 26,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildReader(PdfDocument document) {
     // Attach the document once per identity.
     if (!identical(_attachedDocument, document)) {
@@ -124,9 +205,7 @@ class _PdfBookPageState extends State<PdfBookPage> {
       _controller.attachDocument(document, _buildPages(document));
     }
 
-    // Wait until the start page + neighbours are in the cache. Showing the
-    // curl view earlier makes it capture loading placeholders, which is why
-    // the pages stayed blank until the first page turn.
+    // Wait until the start page + neighbours are in the cache.
     if (!_controller.pagesReady) {
       if (!_preloadStarted) {
         _preloadStarted = true;
@@ -135,8 +214,7 @@ class _PdfBookPageState extends State<PdfBookPage> {
       return _buildLoader();
     }
 
-    // Create the curl controller exactly once, with the correct
-    // `initialPage` so the view opens on the saved page immediately.
+    // Create the curl controller exactly once.
     if (_bookController == null) {
       _bookController = PageCurlController(
         initialPage: _controller.computeStartCurlPage(),
@@ -144,8 +222,7 @@ class _PdfBookPageState extends State<PdfBookPage> {
       _controller.attachBookController(_bookController!);
     }
 
-    // Sync internal state AFTER the current frame finishes, so we never
-    // notify during build.
+    // Sync internal state AFTER the current frame finishes.
     if (!_openedScheduled && !_controller.openedAtStartPage) {
       _openedScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -161,15 +238,22 @@ class _PdfBookPageState extends State<PdfBookPage> {
         _buildBackdrop(document),
         IgnorePointer(
           ignoring: _controller.zoomMode,
-          child: PageCurlView(
-            key: ValueKey('curl_${identityHashCode(document)}'),
-            controller: _bookController!,
-            radius: 0.06,
-            shadowWidth: 0.14,
-            backOpacity: 1.0,
-            edgeZoneWidth: 0.30,
-            onPageChanged: _controller.onCurlPageChanged,
-            children: _controller.pages!,
+          child: FittedBox(
+            fit: BoxFit.fill,
+            child: SizedBox(
+              width: 700,
+              height: 1440,
+              child: PageCurlView(
+                key: ValueKey('curl_${identityHashCode(document)}'),
+                controller: _bookController!,
+                radius: 0.06,
+                shadowWidth: 0.14,
+                backOpacity: 1.0,
+                edgeZoneWidth: 0.30,
+                onPageChanged: _controller.onCurlPageChanged,
+                children: _controller.pages!,
+              ),
+            ),
           ),
         ),
       ],
@@ -182,47 +266,81 @@ class _PdfBookPageState extends State<PdfBookPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: ReaderColors.paper,
-      extendBody: true,
-      body: Column(
+      body: Stack(
         children: [
-          AnimatedBuilder(
-            animation: _controller,
-            builder: (context, _) {
-              return ReaderHeader(
-                title: widget.title,
-                soundEnabled: _controller.soundEnabled,
-                onToggleSound: _controller.toggleSound,
-                currentPage: _controller.currentPdfPage,
-                totalPages: _controller.totalPages == 0
-                    ? 1
-                    : _controller.totalPages,
-              );
-            },
-          ),
-          Expanded(
-            child: ColoredBox(
-              color: ReaderColors.paper,
-              // Document loader stays OUTSIDE so it never rebuilds on
-              // page turns.
-              child: PdfDocumentViewBuilder.asset(
-                widget.assetPath,
-                builder: (context, document) {
-                  if (document == null) return _buildLoader();
+          // 1. The PDF Reader fills the entire screen
+          Positioned.fill(
+            child: PdfDocumentViewBuilder.asset(
+              widget.assetPath,
+              builder: (context, document) {
+                if (document == null) return _buildLoader();
 
-                  // Only the reader listens to the controller.
-                  return AnimatedBuilder(
-                    animation: _controller,
-                    builder: (context, _) {
-                      if (!_controller.prefsReady) return _buildLoader();
-                      return _buildReader(document);
-                    },
-                  );
-                },
-              ),
+                return AnimatedBuilder(
+                  animation: _controller,
+                  builder: (context, _) {
+                    if (!_controller.prefsReady) return _buildLoader();
+                    return _buildReader(document);
+                  },
+                );
+              },
             ),
           ),
+
+          // 2. The Header floats on top (Only Title + Page Number)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, _) {
+                return ReaderHeader(
+                  title: widget.title,
+                  currentPage: _controller.currentPdfPage,
+                  totalPages: _controller.totalPages == 0
+                      ? 1
+                      : _controller.totalPages,
+                );
+              },
+            ),
+          ),
+
+          // 3. The Beautiful Islamic Bottom Bar (with Sound Button)
+          _buildBottomBar(),
         ],
       ),
     );
   }
+}
+
+// ── CUSTOM PAINTER FOR ISLAMIC PATTERN ──────────────────────────
+// This draws a subtle geometric pattern for the bottom bar background.
+class IslamicPatternPainter extends CustomPainter {
+  final Color color;
+  IslamicPatternPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    // Draw a simple repeating diamond/star pattern
+    final double step = 30.0;
+    for (double x = 0; x < size.width; x += step) {
+      for (double y = 0; y < size.height; y += step) {
+        final path = Path();
+        path.moveTo(x, y + step / 2);
+        path.lineTo(x + step / 2, y);
+        path.lineTo(x + step, y + step / 2);
+        path.lineTo(x + step / 2, y + step);
+        path.close();
+        canvas.drawPath(path, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
