@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_page_curl/flutter_page_curl.dart';
 import 'package:hizb_ul_bahr/core/app_constants.dart';
+import 'package:hizb_ul_bahr/features/pdfBook/BookScreenWidgets/app_header.dart';
+import 'package:hizb_ul_bahr/features/pdfBook/BookScreenWidgets/bottom_bar.dart';
 import 'package:hizb_ul_bahr/features/pdfBook/widgets/pdf_reader_controller.dart';
-import 'package:hizb_ul_bahr/features/pdfBook/widgets/pdf_reader_header.dart';
 import 'package:hizb_ul_bahr/features/widgets/chached_pdf_page_image.dart';
 import 'package:hizb_ul_bahr/features/widgets/pdf_page_tile.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -22,15 +22,10 @@ class PdfBookPage extends StatefulWidget {
 
 class _PdfBookPageState extends State<PdfBookPage> {
   late final PdfReaderController _controller;
-
   PageCurlController? _bookController;
-
   PdfDocument? _attachedDocument;
 
-  /// Guards the post-frame "mark opened" so it only runs once per document.
   bool _openedScheduled = false;
-
-  /// Guards the initial image preload so it only starts once per document.
   bool _preloadStarted = false;
 
   @override
@@ -116,88 +111,7 @@ class _PdfBookPageState extends State<PdfBookPage> {
     );
   }
 
-  // ── BEAUTIFUL ISLAMIC BOTTOM BAR ──────────────────────────────
-  // This builds the bottom bar with the sound button and Islamic design.
-  Widget _buildBottomBar() {
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: Container(
-        height: 100, // Height of the bottom bar
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF087055), // ReaderColors.appBar
-              Color(0xFF075A45), // Darker shade for depth
-            ],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Color(0x33000000),
-              blurRadius: 10,
-              offset: Offset(0, -4),
-            ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // 1. Subtle Islamic Pattern overlay
-            Positioned.fill(
-              child: CustomPaint(
-                painter: IslamicPatternPainter(
-                  color: ReaderColors.accent.withValues(alpha: 0.15),
-                ),
-              ),
-            ),
-
-            // 2. Content (Sound Button)
-            Center(
-              child: AnimatedBuilder(
-                animation: _controller,
-                builder: (context, _) {
-                  return _buildSoundButton();
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSoundButton() {
-    final isEnabled = _controller.soundEnabled;
-    return Material(
-      color: Colors.white.withValues(alpha: 0.15),
-      shape: const CircleBorder(),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: _controller.toggleSound,
-        child: Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: ReaderColors.accent.withValues(alpha: 0.5),
-              width: 1.5,
-            ),
-          ),
-          child: Icon(
-            isEnabled ? Icons.volume_up_rounded : Icons.volume_off_rounded,
-            color: isEnabled ? ReaderColors.accent : Colors.white70,
-            size: 26,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildReader(PdfDocument document) {
-    // Attach the document once per identity.
     if (!identical(_attachedDocument, document)) {
       _attachedDocument = document;
       _openedScheduled = false;
@@ -205,7 +119,6 @@ class _PdfBookPageState extends State<PdfBookPage> {
       _controller.attachDocument(document, _buildPages(document));
     }
 
-    // Wait until the start page + neighbours are in the cache.
     if (!_controller.pagesReady) {
       if (!_preloadStarted) {
         _preloadStarted = true;
@@ -214,7 +127,6 @@ class _PdfBookPageState extends State<PdfBookPage> {
       return _buildLoader();
     }
 
-    // Create the curl controller exactly once.
     if (_bookController == null) {
       _bookController = PageCurlController(
         initialPage: _controller.computeStartCurlPage(),
@@ -222,7 +134,6 @@ class _PdfBookPageState extends State<PdfBookPage> {
       _controller.attachBookController(_bookController!);
     }
 
-    // Sync internal state AFTER the current frame finishes.
     if (!_openedScheduled && !_controller.openedAtStartPage) {
       _openedScheduled = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -268,7 +179,7 @@ class _PdfBookPageState extends State<PdfBookPage> {
       backgroundColor: ReaderColors.paper,
       body: Stack(
         children: [
-          // 1. The PDF Reader fills the entire screen
+          // 1. PDF reader fills the screen
           Positioned.fill(
             child: PdfDocumentViewBuilder.asset(
               widget.assetPath,
@@ -286,61 +197,13 @@ class _PdfBookPageState extends State<PdfBookPage> {
             ),
           ),
 
-          // 2. The Header floats on top (Only Title + Page Number)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, _) {
-                return ReaderHeader(
-                  title: widget.title,
-                  currentPage: _controller.currentPdfPage,
-                  totalPages: _controller.totalPages == 0
-                      ? 1
-                      : _controller.totalPages,
-                );
-              },
-            ),
-          ),
+          // 2. Header (title + page number)
+          ReaderAppBar(controller: _controller, title: widget.title),
 
-          // 3. The Beautiful Islamic Bottom Bar (with Sound Button)
-          _buildBottomBar(),
+          // 3. Islamic bottom bar with sound button
+          ReaderBottomBar(controller: _controller),
         ],
       ),
     );
   }
-}
-
-// ── CUSTOM PAINTER FOR ISLAMIC PATTERN ──────────────────────────
-// This draws a subtle geometric pattern for the bottom bar background.
-class IslamicPatternPainter extends CustomPainter {
-  final Color color;
-  IslamicPatternPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-
-    // Draw a simple repeating diamond/star pattern
-    final double step = 30.0;
-    for (double x = 0; x < size.width; x += step) {
-      for (double y = 0; y < size.height; y += step) {
-        final path = Path();
-        path.moveTo(x, y + step / 2);
-        path.lineTo(x + step / 2, y);
-        path.lineTo(x + step, y + step / 2);
-        path.lineTo(x + step / 2, y + step);
-        path.close();
-        canvas.drawPath(path, paint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

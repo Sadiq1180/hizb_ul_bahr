@@ -66,7 +66,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            const HomeFooter(),
+            // const HomeFooter(),
             SizedBox(height: 14 + MediaQuery.of(context).padding.bottom),
           ],
         ),

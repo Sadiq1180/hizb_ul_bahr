@@ -7,7 +7,7 @@ class AppConstants {
   static const arabicNameFont = 'Amiri';
 
   // Change this if your PDF file path is different.
-  static const bookAsset = 'assets/hizb_ul_bahr.pdf';
+  static const bookAsset = 'assets/hizb2.pdf';
 }
 
 /// Pages within this distance of the current page are allowed to load.
