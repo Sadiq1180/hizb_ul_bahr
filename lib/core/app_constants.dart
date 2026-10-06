@@ -5,6 +5,11 @@ class AppConstants {
 
   static const appName = 'حزب البحر';
   static const arabicNameFont = 'Amiri';
+  static const String apkDownloadUrl =
+      'https://drive.google.com/file/d/1rpXgSrv2Snbu4E1Ve4iuuR8LJ0tbfWse/view?usp=drive_link';
+
+  static const String shareMessage =
+      'حزب البحر پڑھنے کے لیے یہ ایپ ڈاؤن لوڈ کریں. 🌙\n\nڈاؤن لوڈ لنک:\n$apkDownloadUrl';
 
   // Change this if your PDF file path is different.
   static const bookAsset = 'assets/hizb2.pdf';
