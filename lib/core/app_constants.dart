@@ -6,13 +6,13 @@ class AppConstants {
   static const appName = 'حزب البحر';
   static const arabicNameFont = 'Amiri';
   static const String apkDownloadUrl =
-      'https://drive.google.com/file/d/1rpXgSrv2Snbu4E1Ve4iuuR8LJ0tbfWse/view?usp=drive_link';
+      'https://github.com/Sadiq1180/hizb_ul_bahr/releases/download/v1.0.0/Hizb.Ul.Bahr.apk';
 
   static const String shareMessage =
       'حزب البحر پڑھنے کے لیے یہ ایپ ڈاؤن لوڈ کریں. 🌙\n\nڈاؤن لوڈ لنک:\n$apkDownloadUrl';
 
   // Change this if your PDF file path is different.
-  static const bookAsset = 'assets/hizb2.pdf';
+  static const bookAsset = 'assets/hizbnew.pdf';
 }
 
 /// Pages within this distance of the current page are allowed to load.
